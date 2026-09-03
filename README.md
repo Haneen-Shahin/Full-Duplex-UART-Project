@@ -2,8 +2,6 @@
 
 A robust and parameterizable **Full-Duplex Universal Asynchronous Receiver-Transmitter (UART) IP Core** implemented in **SystemVerilog**. The design consists of independent and modular **Transmitter (`uart_tx`)** and **Receiver (`uart_rx`)** architectures, supporting configurable data width, parity generation and checking, flexible UART framing, error detection, and seamless back-to-back data transmission.
 
-This project was developed as part of the **MTI Summer Internship**, with a focus on **FPGA-based digital design and traffic-design applications**.
-
 ---
 
 ## 📌 Project Overview
