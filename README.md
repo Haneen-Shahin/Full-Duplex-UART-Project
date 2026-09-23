@@ -1,203 +1,113 @@
-```markdown
 # 📡 Parameterizable Full-Duplex UART IP Core — SystemVerilog
 
-A robust and parameterizable **Full-Duplex Universal Asynchronous Receiver-Transmitter (UART) IP Core** implemented in **SystemVerilog**[cite: 1]. The design consists of independent and modular **Transmitter (`uart_tx`)** and **Receiver (`uart_rx`)** architectures, supporting configurable data width, parity generation/checking, flexible UART framing, error detection, and seamless back-to-back data transmission[cite: 1].
+A parameterizable **Full-Duplex UART IP Core** implemented in SystemVerilog. The design includes independent **Transmitter (`uart_tx`)** and **Receiver (`uart_rx`)** modules with configurable data width, parity support, error detection, and back-to-back transmission.
 
----
+## 📌 Features
 
-## 📌 Project Overview
-
-UART (Universal Asynchronous Receiver-Transmitter) is a widely used serial communication protocol for exchanging data between digital systems without requiring a shared clock between the communicating devices[cite: 1].
-
-This project implements a **full-duplex UART**, allowing the transmitter and receiver to operate independently and simultaneously[cite: 1].
-
-The TX path converts parallel data into a serial UART frame, while the RX path receives and reconstructs the serial frame into parallel data[cite: 1].
-
-The design is written in **SystemVerilog** with a modular RTL architecture suitable for simulation, synthesis, and FPGA implementation[cite: 1].
-
-### Key Features
-* **Full-Duplex Operation**: Independent TX and RX paths allowing simultaneous transmission and reception[cite: 1].
-* **Parameterizable Data Width**: Configurable bus width (`DATA_W`, default = 8)[cite: 1].
-* **Flexible Parity Configuration**: Supports Even Parity, Odd Parity, or Disabled Parity modes[cite: 1].
-* **Back-to-Back Transmission**: High-throughput operation without required inter-frame delays[cite: 1].
-* **Robust Error Detection**: Hardware detection for **Framing Errors** and **Parity Errors**[cite: 1].
-* **Noise/Glitch Filtering**: Integrated sampling and noise filtering logic on the RX line[cite: 1].
-
----
+* Full-duplex UART communication
+* Parameterized data width (`DATA_W`, default = 8)
+* Even, Odd, or Disabled parity
+* Back-to-back frame transmission
+* Parity and framing error detection
+* RX start-bit detection and sampling
+* Modular RTL architecture
 
 ## 🏗️ Architecture
 
 ```text
-                       Full-Duplex UART Block Diagram
-     +----------------------------------------------------------------+
-     |                                                                |
-     |   Parallel Input      +------------------+                     |
----->|--- i_data ----------->|                  |----> o_tx           |----> Serial Output
----->|--- i_valid ---------->|     uart_tx      |----> o_busy         |
-     |                       |  #(DATA_W = 8)   |                     |
-     |                       +------------------+                     |
-     |                                                                |
-     |                       +------------------+----> o_data         |----> Parallel Output
-     |                       |                  |----> o_valid        |
----->|--- i_rx ------------->|     uart_rx      |----> o_busy         |
-     |                       |  #(DATA_W = 8)   |----> o_parity_err   |
-     |                       +------------------+----> o_frame_err    |
-     |                                                                |
-     +----------------------------------------------------------------+
-
+                    Full-Duplex UART
+     +-------------------------------------------+
+     |                                           |
+     |   +------------------+                    |
+     |-->|    uart_tx       |----> o_tx          |
+     |   |                  |----> o_busy        |
+     |   +------------------+                    |
+     |                                           |
+     |   +------------------+----> o_data        |
+     |-->|    uart_rx       |----> o_valid       |
+     |   |                  |----> o_busy        |
+     |   |                  |----> o_parity_err  |
+     |   +------------------+----> o_frame_err   |
+     |                                           |
+     +-------------------------------------------+
 ```
 
----
+## 📤 Transmitter — `uart_tx`
 
-## 📤 Transmitter Architecture (`uart_tx`)
+Converts parallel input data into a UART serial frame consisting of start, data, optional parity, and stop bits.
 
-The UART Transmitter converts a parallel input payload (`i_data`) into a serial bitstream (`o_tx`) framed with start, data, optional parity, and stop bits.
+### Interface
 
-### Port Interface (`uart_tx`)
+| Port        | Direction | Description               |
+| ----------- | --------- | ------------------------- |
+| `i_data`    | Input     | Parallel transmit data    |
+| `i_valid`   | Input     | Transmit request          |
+| `i_clk`     | Input     | System clock              |
+| `i_rst_n`   | Input     | Active-low reset          |
+| `i_par_en`  | Input     | Parity enable             |
+| `i_par_odd` | Input     | Odd/even parity selection |
+| `o_tx`      | Output    | UART serial output        |
+| `o_busy`    | Output    | Transmission busy flag    |
 
-| Port Name | Direction | Type | Description |
-| --- | --- | --- | --- |
-| `i_clk` | Input | `logic` | System clock signal
+### Main Blocks
 
- |
-| `i_rst_n` | Input | `logic` | Active-low asynchronous reset
+* **TX_FSM** — Controls UART transmission states.
+* **Serializer** — Shifts data out LSB-first.
+* **Parity Calculator** — Generates the selected parity bit.
+* **MUX** — Selects start, data, parity, or stop bit.
 
- |
-| `i_data` | Input | `logic [DATA_W-1:0]` | Parallel input payload to transmit
+## 📥 Receiver — `uart_rx`
 
- |
-| `i_valid` | Input | `logic` | Handshake pulse indicating input data validity
+Receives the UART serial stream, reconstructs the parallel data, and checks parity and stop-bit validity.
 
- |
-| `i_par_en` | Input | `logic` | Enables parity bit generation (`1`: Enabled, `0`: Disabled)
+### Interface
 
- |
-| `i_par_odd` | Input | `logic` | Parity mode selector (`0`: Even Parity, `1`: Odd Parity)
+| Port           | Direction | Description               |
+| -------------- | --------- | ------------------------- |
+| `i_rx`         | Input     | UART serial input         |
+| `i_clk`        | Input     | System clock              |
+| `i_rst_n`      | Input     | Active-low reset          |
+| `i_par_en`     | Input     | Parity checking enable    |
+| `i_par_odd`    | Input     | Odd/even parity selection |
+| `o_data`       | Output    | Received parallel data    |
+| `o_valid`      | Output    | Valid data pulse          |
+| `o_busy`       | Output    | Reception busy flag       |
+| `o_parity_err` | Output    | Parity error flag         |
+| `o_frame_err`  | Output    | Framing error flag        |
 
- |
-| `o_tx` | Output | `logic` | Serial output data line
+### Main Blocks
 
- |
-| `o_busy` | Output | `logic` | High when transmission is actively in progress
+* **Data Synchronizer / Sampler** — Synchronizes and samples the RX input.
+* **RX_FSM** — Controls the reception sequence.
+* **Deserializer** — Converts serial data to parallel data.
+* **Parity Checker** — Detects parity errors.
 
- |
+## 🛠️ Verification
 
-### Submodule Breakdown
+The UART was verified using **SystemVerilog self-checking testbenches** and **Siemens QuestaSim**.
 
-* **`TX_FSM`**: Controls state transitions (`IDLE` $\rightarrow$ `START` $\rightarrow$ `DATA` $\rightarrow$ `PARITY` $\rightarrow$ `STOP`) and control flags.
+Verification includes:
 
+* Reset and RX noise/glitch handling
+* Even and odd parity modes
+* Parity error injection
+* Framing error detection
+* Back-to-back frame transmission
+* TX/RX data integrity
 
-* **`Serializer`**: Parameterized shift register converting parallel data to serial bitstreams LSB-first.
+## 📊 Simulation
 
+Simulation results confirm correct:
 
-* **`paritybit_calc`**: Pre-calculates even (XOR) or odd (XNOR) parity over payload bits.
+* UART frame timing
+* TX/RX data transfer
+* Parity and framing error detection
+* Back-to-back operation
 
+**Verification Status:** 0 Errors, 0 Warnings
 
-* **`mux`**: Routes start bit, data bits, parity, or stop bit to `o_tx`.
-
-
-
----
-
-## 📥 Receiver Architecture (`uart_rx`)
-
-The UART Receiver samples incoming asynchronous serial data (`i_rx`), reconstructs the parallel payload (`o_data`), and validates framing and parity integrity.
-
-### Port Interface (`uart_rx`)
-
-| Port Name | Direction | Type | Description |
-| --- | --- | --- | --- |
-| `i_clk` | Input | `logic` | System clock signal
-
- |
-| `i_rst_n` | Input | `logic` | Active-low asynchronous reset
-
- |
-| `i_rx` | Input | `logic` | Serial input data line
-
- |
-| `i_par_en` | Input | `logic` | Enables parity evaluation (`1`: Enabled, `0`: Disabled)
-
- |
-| `i_par_odd` | Input | `logic` | Parity mode selector (`0`: Even Parity, `1`: Odd Parity)
-
- |
-| `o_data` | Output | `logic [DATA_W-1:0]` | Latched parallel received payload
-
- |
-| `o_valid` | Output | `logic` | Single-cycle pulse indicating valid received data
-
- |
-| `o_busy` | Output | `logic` | High while receiving a frame
-
- |
-| `o_parity_err` | Output | `logic` | Asserted if received parity bit mismatches expected value
-
- |
-| `o_frame_err` | Output | `logic` | Asserted if stop bit is invalid (`1'b0` instead of `1'b1`)
-
- |
-
-### Submodule Breakdown
-
-* **`Data_Sync / Sampler`**: Mid-bit oversampling and glitch filtering for start bit detection.
-
-
-* **`RX_FSM`**: Coordinates data collection, parity evaluation, and flag generation sequences.
-
-
-* **`Deserializer`**: Reconstructs serial stream into parallel payload LSB-first.
-
-
-* **`paritybit_chk`**: Evaluates payload against received parity bit to flag discrepancies.
-
-
-
----
-
-## 🛠️ Verification & Testbench Strategy
-
-Comprehensive verification is performed using self-checking SystemVerilog testbenches to validate protocol compliance and edge-case behaviors.
-
-### Key Verification Scenarios
-
-* **Reset & Glitch Rejection**: Verifies FSM initialization upon `i_rst_n = 0` and ensures noise pulses in `IDLE` do not trigger false reception starts.
-
-
-* **Parity Validation (Even & Odd)**: Validates correct parity generation/checking and intentional error assertion when bit errors are injected.
-
-
-* **Framing Error Detection**: Verifies `o_frame_err` triggers properly if `i_rx` is driven low during the stop bit sampling window.
-
-
-* **Back-To-Back Transfers**: Ensures zero-inter-frame gap transfers operate smoothly without payload loss or frame corruption.
-
-
-
----
-
-## 📊 Functional Simulation & Results
-
-The behavioral SystemVerilog implementation was verified using **Siemens QuestaSim**.
-
-* **Timing Compliance**: State transitions, handshake signals (`load`, `ser_en`, `deser_en`), and serial bit durations strictly align with standard UART framing.
-
-
-* **Data Integrity**: Complete data symmetry achieved across full-duplex transfers with LSB-first ordering.
-
-
-* **Verification Status**: Self-checking testbench suite passed with **0 Errors and 0 Warnings**.
-
-
-
----
-
-## 👤 Author & License
+## 👤 Author
 
 **Haneen Fady Shahin**
 
-This open-source IP core is available for research, academic coursework, and engineering integration. Reuse, modifications, and project integration are welcomed.
-
-```
-
-```
+This project is open for **learning, educational use, and experimentation**. Feel free to study the design, modify it, or use it as a reference for similar academic projects.
